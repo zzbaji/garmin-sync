@@ -1,6 +1,8 @@
 """A .fit fájlok elemzése a napló oszlopaihoz.
 Szabályok az Edzés-értékelések chatben kialakított edzes.sh alapján."""
 import io
+
+VERSION = 2              # növeld, ha a számítás változik: a sync mindent újraelemez
 from fitparse import FitFile
 
 ROUTE_KM = 16.1        # az ingázási útvonal hossza
@@ -214,19 +216,21 @@ def endurance(sess, recs, indoor):
         "emelkedes_m": sess.get("total_ascent"),
         "hom_C": temp_range(R, sess),
         "teljesitmeny": power_stats(R),
-        "HR_110_140_pct": round(sum(r["_w"] for r in R if 110 <= hr(r) <= 140) / tot_w * 100),
-        "HR_120_140_pct": round(sum(r["_w"] for r in R if 120 <= hr(r) <= 140) / tot_w * 100),
-        "p_140": minutes(R, lambda r: hr(r) > 140),
+        "HR_110_140_pct": round(sum(r["_w"] for r in R if 110 <= hr(r) < 140) / tot_w * 100),
+        "HR_120_140_pct": round(sum(r["_w"] for r in R if 120 <= hr(r) < 140) / tot_w * 100),
+        "p_140": minutes(R, lambda r: hr(r) >= 140),   # a régi elemzésekben 140-től számolt
         "kadencia": round(wavg(R, "cadence") or 0),
     }
     if has_power(R):
-        # dekoppling: (EF2/EF1 - 1)*100, EF = átl. W / átl. HR; az első 10 perc nélkül
-        body = [r for r in R if r["_t"] >= 600]
+        # dekoppling (Pw:HR): fő rész = a 15. perctől a vége előtti 10. percig,
+        # félidőnként EF = NP / átl. HR; érték = (EF2/EF1 - 1)*100, negatív = drift
+        end_t = R[-1]["_t"] - 600
+        body = [r for r in R if 900 <= r["_t"] < end_t]
         if len(body) > 1200:
-            mid = body[len(body) // 2]["_t"]
+            half = len(body) // 2
             ef = []
-            for half in ([r for r in body if r["_t"] < mid], [r for r in body if r["_t"] >= mid]):
-                ef.append((sum(r.get("power") or 0 for r in half) / len(half)) / wavg(half, "heart_rate"))
+            for seg in (body[:half], body[half:]):
+                ef.append(power_stats(seg)["NP"] / wavg(seg, "heart_rate"))
             out["dekoppling_pct"] = round((ef[1] / ef[0] - 1) * 100, 1)
     if not indoor:
         out["hatekonysagi_index"] = efficiency_index([r for r in R if r.get("distance") is not None])

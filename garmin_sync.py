@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from garminconnect import Garmin
-from analyze import analyze
+from analyze import analyze, VERSION as AN_VER
 from feedcrypt import decrypt, opaque_name, write_if_changed
 
 WINDOW_DAYS = 45
@@ -157,24 +157,28 @@ def main():
         prev = old_acts.get(aid)
         if cat in ("kondi", "egyeb"):
             pass                                    # kondi: elég a bejegyzés, nincs letöltés
-        elif prev and prev.get("elemzes"):
-            entry["elemzes"] = prev["elemzes"]
+        elif prev and prev.get("elemzes") and prev.get("v") == AN_VER:
+            entry["elemzes"], entry["v"] = prev["elemzes"], AN_VER
         else:
             try:
-                fit = fetch_fit(g, aid)
                 name = opaque_name(FEED_KEY, f"act:{aid}")
-                write_if_changed(FEED_KEY, ARCH / "fit" / f"{name}.enc", fit)
+                arch = ARCH / "fit" / f"{name}.enc"
+                if arch.exists():                       # újraelemzés az archívumból
+                    fit = decrypt(FEED_KEY, arch.read_bytes())
+                else:
+                    fit = fetch_fit(g, aid)
+                    write_if_changed(FEED_KEY, arch, fit)
+                    time.sleep(1)
                 res = analyze(fit, cat)
                 res["garmin_id"] = aid
                 write_if_changed(FEED_KEY, DATA / "a" / f"{name}.enc",
                                  json.dumps(res, ensure_ascii=False, default=str).encode())
-                entry["elemzes"] = name
+                entry["elemzes"], entry["v"] = name, AN_VER
                 new_cnt += 1
-                time.sleep(1)
             except Exception as e:
-                log(f"! {aid} letöltése/elemzése sikertelen: {e}")
+                log(f"! {aid} ({entry['datum']} {entry['kezdes']}) letöltése/elemzése sikertelen: {e}")
         out_acts.append(entry)
-    log(f"✓ Aktivitások: {len(out_acts)} db, ebből új elemzés: {new_cnt}")
+    log(f"✓ Aktivitások: {len(out_acts)} db, ebből (új)elemzés: {new_cnt}")
 
     # --- alvás
     refresh_from = today - timedelta(days=SLEEP_REFRESH_DAYS - 1)
