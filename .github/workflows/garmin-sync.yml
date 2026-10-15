@@ -26,5 +26,8 @@ jobs:
         run: |
           git config user.name "garmin-sync"
           git config user.email "garmin-sync@users.noreply.github.com"
-          git add -A data archive state
-          git diff --cached --quiet || (git commit -q -m "sync" && git push -q)
+          git add -A
+          if git diff --cached --quiet; then echo "nincs változás"; exit 0; fi
+          git commit -q -m "sync"
+          git pull -q --rebase
+          git push -q
