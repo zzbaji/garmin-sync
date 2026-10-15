@@ -1,0 +1,30 @@
+name: garmin-sync
+on:
+  schedule:
+    - cron: "17 4-21 * * *"     # óránként, kb. 6 és 23 óra között (magyar idő)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: garmin-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -q garminconnect fitparse cryptography
+      - run: python garmin_sync.py
+        env:
+          GARMINTOKENS: ${{ secrets.GARMINTOKENS }}
+          FEED_KEY: ${{ secrets.FEED_KEY }}
+          TOKEN_KEY: ${{ secrets.TOKEN_KEY }}
+      - name: commit
+        run: |
+          git config user.name "garmin-sync"
+          git config user.email "garmin-sync@users.noreply.github.com"
+          git add -A data archive state
+          git diff --cached --quiet || (git commit -q -m "sync" && git push -q)
