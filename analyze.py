@@ -2,7 +2,7 @@
 Szabályok az Edzés-értékelések chatben kialakított edzes.sh alapján."""
 import io
 
-VERSION = 2              # növeld, ha a számítás változik: a sync mindent újraelemez
+VERSION = 3              # növeld, ha a számítás változik: a sync mindent újraelemez
 from fitparse import FitFile
 
 ROUTE_KM = 16.1        # az ingázási útvonal hossza
@@ -143,12 +143,15 @@ def per_minute(rs, start_min, end_min):
 def commute(sess, recs, mode):
     R = [r for r in recs if r.get("heart_rate") and r.get("distance") is not None]
     tot = R[-1]["distance"]
+    # A külterület hossza fix (16,1 - 6,0 = 10,1 km), a város kapja a kitérőket:
+    # odaút: külterület az ELSŐ 10,1 km; hazaút: külterület az UTOLSÓ 10,1 km.
+    rural = (ROUTE_KM - CITY_KM) * 1000
     if mode == "odaut":
-        kul = [r for r in R if r["distance"] < tot - CITY_KM * 1000]
-        var = [r for r in R if r["distance"] >= tot - CITY_KM * 1000]
+        kul = [r for r in R if r["distance"] < rural]
+        var = [r for r in R if r["distance"] >= rural]
     else:
-        var = [r for r in R if r["distance"] < CITY_KM * 1000]
-        kul = [r for r in R if r["distance"] >= CITY_KM * 1000]
+        var = [r for r in R if r["distance"] < tot - rural]
+        kul = [r for r in R if r["distance"] >= tot - rural]
     km = (sess.get("total_distance") or tot) / 1000
     timer = sess.get("total_timer_time") or sum(r["_w"] for r in R)
     hr = lambda r: r.get("heart_rate") or 0
