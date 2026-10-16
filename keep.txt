@@ -1,0 +1,17 @@
+# Kiemelt aktivitások: ezek a 45 napos ablakon túl is megmaradnak a feedben (.fit + elemzés).
+# Soronként egy Garmin-azonosító; a # utáni rész megjegyzés. Törlés = a sor törlése.
+24197238087  # 2026-09-01 odaút — REFERENCIA (terv előtti)
+24294042207  # 2026-09-09 odaút — SZERDA-REFERENCIA
+24399712932  # 2026-09-17 odaút — CSÜTÖRTÖK-REFERENCIA, leggyorsabb reggel
+24286117257  # 2026-09-08 hazaút — KEDD-REFERENCIA
+24386275980  # 2026-09-16 hazaút — SZERDA-REFERENCIA
+24489874840  # 2026-09-24 hazaút — 0–46. perc nulla mp 135 felett
+24542864268  # 2026-09-29 hazaút — célsáv-rekord 57%
+24554649306  # 2026-09-30 hazaút — célsáv-rekord 59%
+24630706234  # 2026-10-06 hazaút — legkevesebb kilépés (3,0 p)
+24641077902  # 2026-10-07 hazaút — legjobb VI (1.09)
+24735359852  # 2026-10-15 hazaút — leggyorsabb (53:09, tempómenet)
+24417187823  # 2026-09-19 hosszú — protokollteszt
+24502037631  # 2026-09-26 görgő — FTP rámpateszt
+24589277622  # 2026-10-03 görgő — 2h23 alapozó
+24673062252  # 2026-10-10 görgő — 2h10 alapozó v2

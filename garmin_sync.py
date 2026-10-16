@@ -19,8 +19,10 @@ from feedcrypt import decrypt, opaque_name, write_if_changed
 
 WINDOW_DAYS = 45
 SLEEP_REFRESH_DAYS = 3
-ROOT = Path(__file__).parent
+CODE = Path(__file__).parent
+ROOT = Path(os.environ.get("FEED_DIR", CODE / "feed"))   # a "feed" ágat ide tölti a workflow
 DATA, ARCH, STATE = ROOT / "data", ROOT / "archive", ROOT / "state"
+KEEP_FILE = CODE / "keep.txt"
 
 FEED_KEY = os.environ["FEED_KEY"]               # Claude is ismeri: feed visszafejtése
 TOKEN_KEY = os.environ.get("TOKEN_KEY")          # csak az Actions ismeri: Garmin-token
@@ -125,6 +127,49 @@ def sleep_summary(s):
     }
 
 
+# ---------------------------------------------------------------- megőrzés
+def load_keep():
+    """keep.txt: soronként egy Garmin-azonosító, # utáni rész megjegyzés."""
+    ids = set()
+    if KEEP_FILE.exists():
+        for line in KEEP_FILE.read_text().splitlines():
+            tok = line.split("#", 1)[0].strip()
+            if tok.isdigit():
+                ids.add(int(tok))
+    return ids
+
+
+def prune(keep_names, keep_sleep_names):
+    """Minden, ami nincs az ablakban és nem kiemelt, törlődik."""
+    removed = 0
+    for folder, keep in ((ARCH / "fit", keep_names), (DATA / "a", keep_names),
+                         (ARCH / "sleep", keep_sleep_names)):
+        if folder.exists():
+            for f in folder.glob("*.enc"):
+                if f.stem not in keep:
+                    f.unlink()
+                    removed += 1
+    return removed
+
+
+def analyze_entry(g, entry, cat):
+    """Elemzés az archívumból, vagy letöltés + archiválás. Visszaadja: új elemzés történt-e."""
+    aid = entry["id"]
+    name = opaque_name(FEED_KEY, f"act:{aid}")
+    arch = ARCH / "fit" / f"{name}.enc"
+    if arch.exists():
+        fit = decrypt(FEED_KEY, arch.read_bytes())
+    else:
+        fit = fetch_fit(g, aid)
+        write_if_changed(FEED_KEY, arch, fit)
+        time.sleep(1)
+    res = analyze(fit, cat)
+    res["garmin_id"] = aid
+    write_if_changed(FEED_KEY, DATA / "a" / f"{name}.enc",
+                     json.dumps(res, ensure_ascii=False, default=str).encode())
+    entry["elemzes"], entry["v"] = name, AN_VER
+
+
 # ---------------------------------------------------------------- fő
 def main():
     g, tok = connect()
@@ -161,19 +206,7 @@ def main():
             entry["elemzes"], entry["v"] = prev["elemzes"], AN_VER
         else:
             try:
-                name = opaque_name(FEED_KEY, f"act:{aid}")
-                arch = ARCH / "fit" / f"{name}.enc"
-                if arch.exists():                       # újraelemzés az archívumból
-                    fit = decrypt(FEED_KEY, arch.read_bytes())
-                else:
-                    fit = fetch_fit(g, aid)
-                    write_if_changed(FEED_KEY, arch, fit)
-                    time.sleep(1)
-                res = analyze(fit, cat)
-                res["garmin_id"] = aid
-                write_if_changed(FEED_KEY, DATA / "a" / f"{name}.enc",
-                                 json.dumps(res, ensure_ascii=False, default=str).encode())
-                entry["elemzes"], entry["v"] = name, AN_VER
+                analyze_entry(g, entry, cat)
                 new_cnt += 1
             except Exception as e:
                 log(f"! {aid} ({entry['datum']} {entry['kezdes']}) letöltése/elemzése sikertelen: {e}")
@@ -200,8 +233,32 @@ def main():
         d += timedelta(days=1)
     log(f"✓ Alvás: {len(sleeps)} nap ismert, most lekérve: {fetched}")
 
+    # --- kiemelt (keep.txt) aktivitások: az ablakon kívül is megmaradnak
+    keep_ids = load_keep()
+    in_window = {a["id"] for a in out_acts}
+    old_kept = {a["id"]: a for a in old.get("kiemelt", [])}
+    kept = []
+    for kid in sorted(keep_ids - in_window):
+        e = old_acts.get(kid) or old_kept.get(kid)
+        if not e or not e.get("elemzes"):
+            continue                      # már nincs meg, vagy sosem volt letöltve
+        if e.get("v") != AN_VER:
+            try:
+                analyze_entry(g, e, e["kategoria"])
+            except Exception as ex:
+                log(f"! kiemelt {kid} újraelemzése sikertelen: {ex}")
+        kept.append(e)
+    for a in out_acts:
+        a["kiemelt"] = a["id"] in keep_ids
+
+    keep_names = {a["elemzes"] for a in out_acts + kept if a.get("elemzes")}
+    keep_sleep = {opaque_name(FEED_KEY, "sleep:" + d) for d in sleeps}
+    removed = prune(keep_names, keep_sleep)
+    log(f"✓ Kiemelt az ablakon kívül: {len(kept)} db · törölt régi fájl: {removed}")
+
     index = {"ablak": [start.isoformat(), today.isoformat()],
-             "aktivitasok": out_acts, "alvas": dict(sorted(sleeps.items()))}
+             "aktivitasok": out_acts, "kiemelt": kept,
+             "alvas": dict(sorted(sleeps.items()))}
     # a generálás idejét nem tesszük az indexbe, hogy változatlan adatnál ne legyen commit
     changed = write_if_changed(FEED_KEY, idx_path,
                                json.dumps(index, ensure_ascii=False, sort_keys=True).encode())

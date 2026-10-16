@@ -5,7 +5,7 @@
 import json, os, sys, urllib.request
 from feedcrypt import decrypt
 
-BASE = "https://raw.githubusercontent.com/zzbaji/garmin-sync/main/data"
+BASE = "https://raw.githubusercontent.com/zzbaji/garmin-sync/feed/data"
 
 
 def get(path):

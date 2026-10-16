@@ -12,22 +12,38 @@ jobs:
   sync:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5            # kód: main ág
+      - name: feed ág letöltése (ha már van)
+        run: |
+          if git ls-remote --exit-code --heads origin feed >/dev/null; then
+            git fetch -q --depth=1 origin feed
+            git worktree add -q feed FETCH_HEAD
+          else
+            mkdir feed
+          fi
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install -q garminconnect fitparse cryptography
       - run: python garmin_sync.py
         env:
+          FEED_DIR: feed
           GARMINTOKENS: ${{ secrets.GARMINTOKENS }}
           FEED_KEY: ${{ secrets.FEED_KEY }}
           TOKEN_KEY: ${{ secrets.TOKEN_KEY }}
-      - name: commit
+      - name: feed ág felülírása egyetlen commitként (nincs előzmény)
         run: |
+          cd feed
+          rm -rf .git 2>/dev/null || true; rm -f .git
+          git init -q -b feed
           git config user.name "garmin-sync"
           git config user.email "garmin-sync@users.noreply.github.com"
           git add -A
-          if git diff --cached --quiet; then echo "nincs változás"; exit 0; fi
-          git commit -q -m "sync"
-          git pull -q --rebase
-          git push -q
+          NEW=$(git write-tree)
+          OLD=$(git ls-remote "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" refs/heads/feed | cut -f1)
+          if [ -n "$OLD" ]; then
+            git fetch -q --depth=1 "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" feed
+            if [ "$(git rev-parse FETCH_HEAD^{tree})" = "$NEW" ]; then echo "nincs változás"; exit 0; fi
+          fi
+          git commit -q -m "feed"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" feed:feed
