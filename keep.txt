@@ -17,3 +17,4 @@
 24673062252  # 2026-10-10 görgő — 2h10 alapozó v2
 24792659167  # 2026-10-20 hazaút — legkevesebb kilépés (2,6 p)
 24755799761  # 2026-10-17 hosszú — első kinti hosszú wattal
+24846797208  # 2026-10-25 hosszú — első az új protokoll szerint, referencia
